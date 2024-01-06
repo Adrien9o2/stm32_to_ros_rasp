@@ -9,5 +9,5 @@ namespace SerialID
 	inline constexpr uint8_t MSG_NO_ID = 0xFB;
 	inline constexpr uint8_t MSG_NO_SIZE = 0xFA;
 	inline constexpr uint8_t MSG_PRINT = 0x00;
-	inline constexpr uint8_t MSG_DATA_1 = 0x01;
+	inline constexpr uint8_t MSG_MOTOR_SPEEDS = 0x01;
 };
