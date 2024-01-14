@@ -5,6 +5,7 @@
 
 #include <std_msgs/msg/float32_multi_array.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <std_msgs/msg/float32.hpp>
 
 
 using std::placeholders::_1;
@@ -33,16 +34,18 @@ class WheelSpeedsConverter : public rclcpp::Node
 {
     public:
         WheelSpeedsConverter()
-        : Node("wheel_speeds_converter_node"), robot_speeds_ok(false), wheel_speeds_ok(false)
+        : Node("wheel_speeds_converter_node"), robot_speeds_ok(false), wheel_speeds_ok(false), first_heading_set(false), first_cmd_read(false)
         {
 
           this->declare_parameter("L1PL2_m", 0.2);
           this->declare_parameter("wheel_diameter_m", 0.045);
+          this->declare_parameter("kptheta",0.1);
           registered_L1PL2_m = this->get_parameter("L1PL2_m").as_double();
           registered_wheel_radius_m = this->get_parameter("L1PL2_m").as_double();
+          kptheta = this->get_parameter("kptheta").as_double();
           registered_L1PL2_m_save = registered_L1PL2_m;
           registered_wheel_radius_m_save = registered_wheel_radius_m;
-
+          kptheta_save = kptheta;
 
           param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
           
@@ -51,10 +54,14 @@ class WheelSpeedsConverter : public rclcpp::Node
           };
           auto cb_wheel_radius = [this](const rclcpp::Parameter & p) {
               this->registered_wheel_radius_m_save = p.as_double();
-          };          
+          };
+          auto cb_kp = [this](const rclcpp::Parameter & p) {
+              this->kptheta_save = p.as_double();
+          };            
           
           cb_handle_ = param_subscriber_->add_parameter_callback("L1PL2_m", cb_L1PL2);
           cb_handle_ = param_subscriber_->add_parameter_callback("wheel_diameter_m", cb_wheel_radius);
+          cb_handle_ = param_subscriber_->add_parameter_callback("kptheta",cb_kp);
 
           publisher_wheel_speeds_rad_s = this->create_publisher<std_msgs::msg::Float32MultiArray>("cmd/wheel_speeds_rad_s",10);
           publisher_robot_speeds_m_s_and_rad_s = this->create_publisher<geometry_msgs::msg::TwistStamped>("odo/robot_speed_m_s_and_rad_s",10);
@@ -73,6 +80,8 @@ class WheelSpeedsConverter : public rclcpp::Node
             10, 
             std::bind(&WheelSpeedsConverter::topic_callback_robot_speeds, this, _1)
           );
+
+          subscriber_gyro_rad = this->create_subscription<std_msgs::msg::Float32>("/odo/gyro_rad",10,std::bind(&WheelSpeedsConverter::topic_callback_gyro,this,_1));
 
           loop_timer = this->create_wall_timer(
               0ms, std::bind(&WheelSpeedsConverter::loop, this)
@@ -104,21 +113,60 @@ class WheelSpeedsConverter : public rclcpp::Node
           }
           if( robot_speeds_ok)
           {
-            compute_robot_to_wheels(
-              &received_from_cmd_robot_speeds.twist.linear.x,
-              &received_from_cmd_robot_speeds.twist.linear.y,
-              &received_from_cmd_robot_speeds.twist.angular.z,
-              to_send_to_serial_wheel_speeds.data.data() + front_left,
-              to_send_to_serial_wheel_speeds.data.data() + front_right,
-              to_send_to_serial_wheel_speeds.data.data() + back_left,
-              to_send_to_serial_wheel_speeds.data.data() + back_right
-            );
-            publisher_wheel_speeds_rad_s->publish(to_send_to_serial_wheel_speeds);
-            robot_speeds_ok = false;
+            if( first_cmd_read == false || first_heading_set==false)
+            {
+              compute_robot_to_wheels(
+                &received_from_cmd_robot_speeds.twist.linear.x,
+                &received_from_cmd_robot_speeds.twist.linear.y,
+                &received_from_cmd_robot_speeds.twist.angular.z,
+                to_send_to_serial_wheel_speeds.data.data() + front_left,
+                to_send_to_serial_wheel_speeds.data.data() + front_right,
+                to_send_to_serial_wheel_speeds.data.data() + back_left,
+                to_send_to_serial_wheel_speeds.data.data() + back_right
+              );
+              publisher_wheel_speeds_rad_s->publish(to_send_to_serial_wheel_speeds);
+              robot_speeds_ok = false;
+              last_received_from_cmd_robot_speeds = received_from_cmd_robot_speeds;
+              first_cmd_read = true;
+            }
+            else
+            {
+              double corrected_angular = received_from_cmd_robot_speeds.twist.angular.z + kptheta*(last_received_from_cmd_robot_speeds.twist.angular.z-vtheta);
+              compute_robot_to_wheels(
+                &received_from_cmd_robot_speeds.twist.linear.x,
+                &received_from_cmd_robot_speeds.twist.linear.y,
+                &corrected_angular,
+                to_send_to_serial_wheel_speeds.data.data() + front_left,
+                to_send_to_serial_wheel_speeds.data.data() + front_right,
+                to_send_to_serial_wheel_speeds.data.data() + back_left,
+                to_send_to_serial_wheel_speeds.data.data() + back_right
+              );
+              publisher_wheel_speeds_rad_s->publish(to_send_to_serial_wheel_speeds);
+              robot_speeds_ok = false;
+              last_received_from_cmd_robot_speeds = received_from_cmd_robot_speeds;
+              first_cmd_read = true;
+            }
+
           }
           registered_L1PL2_m = registered_L1PL2_m_save;
           registered_wheel_radius_m = registered_wheel_radius_m_save;
+          kptheta = kptheta_save;
 
+        }
+        void topic_callback_gyro( const std_msgs::msg::Float32::SharedPtr msg)
+        {
+          if( first_heading_set == false)
+          {
+            last_heading_rad = msg->data;
+            first_heading_set = true;
+            timer_value_s = this->get_clock()->now().seconds();
+            return;
+          }
+          double now = this->get_clock()->now().seconds();
+          double delta = timer_value_s - now;
+          vtheta = msg->data - last_heading_rad / delta;
+          last_heading_rad = msg->data;
+          timer_value_s = now;
         }
 
         void topic_callback_wheel_speeds(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
@@ -169,11 +217,13 @@ class WheelSpeedsConverter : public rclcpp::Node
       rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr publisher_robot_speeds_m_s_and_rad_s;
       rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_wheel_speeds_rad_s;
       rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr subscriber_wheel_speeds_rad_s;
+      rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscriber_gyro_rad;
       rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr subscriber_robot_speeds_m_s_and_rad_s;
       
       std_msgs::msg::Float32MultiArray received_from_serial_wheel_speeds;
       std_msgs::msg::Float32MultiArray to_send_to_serial_wheel_speeds;
       geometry_msgs::msg::TwistStamped received_from_cmd_robot_speeds;
+      geometry_msgs::msg::TwistStamped last_received_from_cmd_robot_speeds;
       geometry_msgs::msg::TwistStamped received_from_serial_robot_speeds;
 
       std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
@@ -183,6 +233,18 @@ class WheelSpeedsConverter : public rclcpp::Node
       double registered_wheel_radius_m;
       double registered_L1PL2_m_save;
       double registered_wheel_radius_m_save;
+      double kptheta;
+      double kptheta_save;
+      double kitheta;
+      double kitheta_save;
+      double kdtheta;
+      double kdtheta_save;
+
+      float last_heading_rad;
+      bool first_heading_set;
+      double timer_value_s;
+      double vtheta;
+      bool first_cmd_read;
 
       bool robot_speeds_ok;
       bool wheel_speeds_ok;
