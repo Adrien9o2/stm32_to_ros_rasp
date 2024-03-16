@@ -39,11 +39,6 @@ import threading
 
 import keyboard
 
-if sys.platform == 'win32':
-    import msvcrt
-else:
-    import termios
-    import tty
 
 
 msg = """
@@ -90,24 +85,11 @@ speedBindings = {
 def get_key():
     return keyboard.get_hotkey_name()
 
-def saveTerminalSettings():
-    if sys.platform == 'win32':
-        return None
-    return termios.tcgetattr(sys.stdin)
-
-
-def restoreTerminalSettings(old_settings):
-    if sys.platform == 'win32':
-        return
-    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-
-
 def vels(speed, turn):
     return 'currently:\tspeed %s\tturn %s ' % (speed, turn)
 
 
 def main():
-    settings = saveTerminalSettings()
     keyboard.start_recording()
 
     rclpy.init()
@@ -210,8 +192,6 @@ def main():
         pub.publish(twist_msg)
         rclpy.shutdown()
         spinner.join()
-
-        restoreTerminalSettings(settings)
 
 
 if __name__ == '__main__':

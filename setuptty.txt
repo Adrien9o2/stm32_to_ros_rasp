@@ -1,0 +1,7 @@
+dmesg
+
+sudo nano /etc/udev/rules.d/99-name.rules
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="YOUR_VENDOR_ID", ATTRS{idProduct}=="YOUR_PRODUCT_ID", SYMLINK+="mylink"
+
+sudo udevadm control --reload-rules && sudo udevadm trigger
