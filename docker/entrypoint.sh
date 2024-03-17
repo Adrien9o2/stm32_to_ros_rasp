@@ -4,6 +4,7 @@
 # Source ROS 2
 source /opt/ros/${ROS_DISTRO}/setup.bash
 echo "Sourced ROS 2 ${ROS_DISTRO}"
+ROS_DOMAIN_ID=24
 
 # Source the base workspace, if built
 if [ -f /ros2_ws/install/setup.bash ]

@@ -4,13 +4,15 @@ ARG ROS_DISTRO=iron
 ##############
 # Base Image #
 ##############
-FROM osrf/ros:${ROS_DISTRO}-desktop as base
+#FROM osrf/ros:${ROS_DISTRO}-desktop as base
+FROM ros:${ROS_DISTRO} as base
 ENV ROS_DISTRO=${ROS_DISTRO}
 SHELL ["/bin/bash", "-c"]
 
 # Install basic apt packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
- git libcanberra-gtk-module libcanberra-gtk3-module fuse3 libfuse2 libqt5svg5-dev \
+RUN apt update 
+RUN apt-get install -y --no-install-recommends \
+git libcanberra-gtk-module libcanberra-gtk3-module fuse3 libfuse2 libqt5svg5-dev \
  python3-pip python3-opencv python3-tk python3-pyqt5.qtwebengine libserial-dev
 
 # Install additional Python modules
@@ -78,7 +80,6 @@ FROM overlay as dev
 
 
 # Install extra tools for development
-RUN apt-get update && apt-get install -y --no-install-recommends \
- gdb gdbserver nano
+RUN apt-get update && apt-get install -y --no-install-recommends gdb gdbserver nano
 
 RUN echo "source /entrypoint.sh" >> /root/.bashrc

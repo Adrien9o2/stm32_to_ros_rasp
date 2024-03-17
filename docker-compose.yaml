@@ -39,7 +39,8 @@ services:
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority
-      - /dev/stm32act:/dev/stm32act
+      - /dev/stgyro:/dev/stgyro
+      - /dev/stmotors:/dev/stmotors
       - /dev/input:/dev/input
 
   # Overlay image containing the example source code.
@@ -62,7 +63,7 @@ services:
     volumes:
       # Mount the source code
       - ./holonomic_twist_keyboard:/overlay_ws/src/holonomic_twist_keyboard:rw
-      - ./stm32_to_tos_rasp:/overlay_ws/src/stm32_to_tos_rasp:rw
+      - ./stm32_to_ros_rasp:/overlay_ws/src/stm32_to_ros_rasp:rw
       - ./wheel_speeds_converter:/overlay_ws/src/wheel_speeds_converter:rw
       # Mount colcon build artifacts for faster rebuilds
       - ./.colcon/build/:/overlay_ws/build/:rw

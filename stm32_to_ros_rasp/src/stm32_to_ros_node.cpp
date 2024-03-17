@@ -50,8 +50,8 @@ class WheelSpeedsConverter : public rclcpp::Node
             //     return;
             // }
             // serial_port_string = *iterator;
-            serial_port_.Open("/dev/ttyACM0");
-            serial_port_gyro.Open("/dev/ttyACM1");
+            serial_port_.Open("/dev/stmotors");
+            serial_port_gyro.Open("/dev/stgyro");
             
             serial_port_.SetBaudRate( LibSerial::BaudRate::BAUD_115200);
             serial_port_.FlushIOBuffers();
