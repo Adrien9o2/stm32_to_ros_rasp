@@ -24,6 +24,7 @@ RUN sudo apt-get install -y -q
 COPY keyboardconf.conf keyboardconf.conf
 RUN debconf-set-selections < keyboardconf.conf
 RUN apt-get install -y kbd
+RUN sudo apt-get install -y xterm
 
 # Use Cyclone DDS as middleware
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -64,6 +65,8 @@ FROM base AS overlay
 RUN mkdir -p /overlay_ws/src
 WORKDIR /overlay_ws
 COPY ./stm32_to_ros_rasp/ ./src/stm32_to_ros_rasp/
+COPY ./launch.py ./src/launch.py
+COPY ./launchkeyboard.py ./src/launchkeyboard.py 
 RUN source /ros2_ws/install/setup.bash \
  && rosdep install --from-paths src --ignore-src --rosdistro ${ROS_DISTRO} -y \
  && colcon build --symlink-install
